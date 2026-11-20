@@ -20,7 +20,9 @@ export default function AIAgentBuilder() {
   });
 
   const createAgent = () => {
-    if (!agentForm.name || !agentForm.role) {
+    const name = agentForm.name.trim();
+    const role = agentForm.role.trim();
+    if (!name || !role) {
       alert('Please provide at least a name and role for your agent');
       return;
     }
@@ -28,6 +30,8 @@ export default function AIAgentBuilder() {
     const newAgent = {
       id: Date.now(),
       ...agentForm,
+      name,
+      role,
       createdAt: new Date().toISOString()
     };
 
@@ -270,18 +274,20 @@ Stay in character and be helpful while following these guidelines.`;
                               e.stopPropagation();
                               startChat(agent);
                             }}
+                            aria-label={`Chat with ${agent.name}`}
                             className="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors"
                           >
-                            <MessageSquare className="w-4 h-4" />
+                            <MessageSquare aria-hidden="true" className="w-4 h-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteAgent(agent.id);
                             }}
+                            aria-label={`Delete ${agent.name}`}
                             className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 aria-hidden="true" className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -337,11 +343,14 @@ Stay in character and be helpful while following these guidelines.`;
                       type="text"
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) sendMessage();
+                      }}
                       placeholder="Type your message..."
                       className="flex-1 px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
                     />
                     <button
+                      aria-label="Send message"
                       onClick={sendMessage}
                       disabled={isLoading || !inputMessage.trim()}
                       className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center gap-2"
