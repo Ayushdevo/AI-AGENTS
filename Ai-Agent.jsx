@@ -7,6 +7,7 @@ export default function AIAgentBuilder() {
   const [showBuilder, setShowBuilder] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
+  const [chatError, setChatError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const activeRequest = useRef(null);
   useEffect(() => () => activeRequest.current?.abort(), []);
@@ -16,6 +17,7 @@ export default function AIAgentBuilder() {
     activeRequest.current = null;
     setIsLoading(false);
     setInputMessage('');
+    setChatError('');
   };
 
   // Agent builder form state
@@ -84,6 +86,7 @@ export default function AIAgentBuilder() {
     const updatedMessages = [...chatMessages, userMessage];
     setChatMessages(updatedMessages);
     setInputMessage('');
+    setChatError('');
     setIsLoading(true);
 
     try {
@@ -115,23 +118,22 @@ Stay in character and be helpful while following these guidelines.`;
         })
       });
 
+      if (!response.ok) throw new Error(`Chat request failed (${response.status})`);
       const data = await response.json();
       if (request.signal.aborted) return;
       
-      if (data.content && data.content[0]) {
-        const assistantMessage = {
-          role: 'assistant',
-          content: data.content[0].text
-        };
-        setChatMessages([...updatedMessages, assistantMessage]);
-      }
+      const reply = Array.isArray(data?.content)
+        ? data.content.filter(part => part?.type === 'text' && typeof part.text === 'string')
+          .map(part => part.text).join('\n').trim()
+        : '';
+      if (!reply) throw new Error('Chat response is missing text');
+      setChatMessages([...updatedMessages, { role: 'assistant', content: reply }]);
     } catch (error) {
       if (request.signal.aborted) return;
       console.error('Error calling API:', error);
-      setChatMessages([...updatedMessages, {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.'
-      }]);
+      setChatMessages(chatMessages);
+      setInputMessage(draft => draft || inputMessage);
+      setChatError('Could not get a reply. Try sending your message again.');
     } finally {
       if (activeRequest.current === request) {
         activeRequest.current = null;
@@ -344,6 +346,7 @@ Stay in character and be helpful while following these guidelines.`;
                       </div>
                     </div>
                   ))}
+                  {chatError && <p role="alert" className="text-red-200">{chatError}</p>}
                   {isLoading && (
                     <div className="flex justify-start">
                       <div className="bg-white/10 text-white p-4 rounded-2xl border border-white/20">
