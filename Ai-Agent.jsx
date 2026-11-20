@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bot, Plus, Trash2, MessageSquare, Settings, Send, Sparkles, X } from 'lucide-react';
 
 export default function AIAgentBuilder() {
@@ -8,6 +8,15 @@ export default function AIAgentBuilder() {
   const [chatMessages, setChatMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const activeRequest = useRef(null);
+  useEffect(() => () => activeRequest.current?.abort(), []);
+
+  const resetChatRequest = () => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    setIsLoading(false);
+    setInputMessage('');
+  };
 
   // Agent builder form state
   const [agentForm, setAgentForm] = useState({
@@ -50,12 +59,15 @@ export default function AIAgentBuilder() {
   const deleteAgent = (id) => {
     setAgents(agents.filter(a => a.id !== id));
     if (activeAgent?.id === id) {
+      resetChatRequest();
       setActiveAgent(null);
       setChatMessages([]);
     }
   };
 
   const startChat = (agent) => {
+    if (activeAgent?.id === agent.id) return;
+    resetChatRequest();
     setActiveAgent(agent);
     setChatMessages([{
       role: 'assistant',
@@ -64,7 +76,9 @@ export default function AIAgentBuilder() {
   };
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!activeAgent || !inputMessage.trim() || activeRequest.current) return;
+    const request = new AbortController();
+    activeRequest.current = request;
 
     const userMessage = { role: 'user', content: inputMessage };
     const updatedMessages = [...chatMessages, userMessage];
@@ -84,6 +98,7 @@ Stay in character and be helpful while following these guidelines.`;
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: request.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY || '',
@@ -101,6 +116,7 @@ Stay in character and be helpful while following these guidelines.`;
       });
 
       const data = await response.json();
+      if (request.signal.aborted) return;
       
       if (data.content && data.content[0]) {
         const assistantMessage = {
@@ -110,13 +126,17 @@ Stay in character and be helpful while following these guidelines.`;
         setChatMessages([...updatedMessages, assistantMessage]);
       }
     } catch (error) {
+      if (request.signal.aborted) return;
       console.error('Error calling API:', error);
       setChatMessages([...updatedMessages, {
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.'
       }]);
     } finally {
-      setIsLoading(false);
+      if (activeRequest.current === request) {
+        activeRequest.current = null;
+        if (!request.signal.aborted) setIsLoading(false);
+      }
     }
   };
 
